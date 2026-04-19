@@ -221,8 +221,8 @@ export default function KickoffCallPage() {
   return (
     <div style={{ height: "100vh", display: "flex", flexDirection: "column", background: "#111827" }}>
 
-      {/* ── Header bar ── */}
-      <div style={styles.header}>
+      {/* ── Header bar — hidden during pre-join ── */}
+      <div style={{ ...styles.header, display: (meetingState === "loading" || meetingState === "prejoin") ? "none" : "flex" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           {callConfig?.advisorPhoto && (
             <img
@@ -287,19 +287,20 @@ export default function KickoffCallPage() {
                     </svg>
                   </div>
                   {/* Controls bar */}
-                  <div style={{ background: "#222", padding: "10px 16px", display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{ background: "#222", padding: "10px 16px", display: "flex", alignItems: "center", gap: 6 }}>
                     <button style={styles.zoomCtrlBtn}>
-                      <span style={{ fontSize: 16 }}>🎤</span>
-                      <span style={{ fontSize: 11 }}>Mute</span>
-                      <span style={{ fontSize: 10, color: "#aaa" }}>∧</span>
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M12 1a4 4 0 0 1 4 4v7a4 4 0 0 1-8 0V5a4 4 0 0 1 4-4zm0 2a2 2 0 0 0-2 2v7a2 2 0 0 0 4 0V5a2 2 0 0 0-2-2zm-1 16.93V22h2v-2.07A8 8 0 0 0 20 12h-2a6 6 0 0 1-12 0H4a8 8 0 0 0 7 7.93z"/></svg>
+                      <span style={{ fontSize: 12 }}>Mute</span>
+                      <svg width="10" height="10" viewBox="0 0 10 10" fill="#aaa"><path d="M5 7L1 3h8z"/></svg>
                     </button>
                     <button style={styles.zoomCtrlBtn}>
-                      <span style={{ fontSize: 16 }}>📷</span>
-                      <span style={{ fontSize: 11 }}>Start Video</span>
-                      <span style={{ fontSize: 10, color: "#aaa" }}>∧</span>
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M15 8v8H5V8h10m1-2H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4v-11l-4 4V7a1 1 0 0 0-1-1z"/></svg>
+                      <span style={{ fontSize: 12 }}>Start Video</span>
+                      <svg width="10" height="10" viewBox="0 0 10 10" fill="#aaa"><path d="M5 7L1 3h8z"/></svg>
                     </button>
                     <button style={{ ...styles.zoomCtrlBtn, marginLeft: "auto" }}>
-                      <span style={{ fontSize: 11 }}>🖼 Backgrounds</span>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="white"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+                      <span style={{ fontSize: 12 }}>Backgrounds</span>
                     </button>
                   </div>
                 </div>
@@ -329,7 +330,7 @@ export default function KickoffCallPage() {
                   <button
                     onClick={() => { if (callConfig && userName.trim()) initMeeting(callConfig); }}
                     disabled={!userName.trim()}
-                    style={{ ...styles.zoomJoinBtn, opacity: userName.trim() ? 1 : 0.6 }}
+                    style={{ ...styles.zoomJoinBtn, background: userName.trim() ? "#0b5cff" : "#e8e8e8", color: userName.trim() ? "#fff" : "#333" }}
                   >
                     Join
                   </button>
