@@ -20,6 +20,8 @@ type KOCallConfig = {
 
 type MeetingState = "loading" | "prejoin" | "joining" | "live" | "error";
 
+type Slot = { id: string; label: string; time: string; iso: string };
+
 // ---------------------------------------------------------------------------
 // Analytics helper — swap with Mixpanel / Segment in production
 // ---------------------------------------------------------------------------
@@ -48,6 +50,14 @@ export default function KickoffCallPage() {
   const [errorMessage, setErrorMessage] = useState("");
   const [joinTime, setJoinTime] = useState<number | null>(null);
   const [userName, setUserName] = useState("");
+
+  // Reschedule modal (shown over the live meeting — call stays active)
+  const [showRescheduleModal, setShowRescheduleModal] = useState(false);
+  const [rescheduleSlots, setRescheduleSlots] = useState<Slot[]>([]);
+  const [slotsLoading, setSlotsLoading] = useState(false);
+  const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
+  const [rescheduleConfirming, setRescheduleConfirming] = useState(false);
+  const [rescheduleConfirmed, setRescheduleConfirmed] = useState(false);
 
   // -------------------------------------------------------------------------
   // 1. Fetch KO call config from backend
@@ -92,6 +102,55 @@ export default function KickoffCallPage() {
 
   // Prevents double-navigation when we call leaveMeeting() ourselves
   const isManualLeave = useRef(false);
+
+  // -------------------------------------------------------------------------
+  // After join: log Zoom DOM classes + try to PiP the self-view
+  // -------------------------------------------------------------------------
+  useEffect(() => {
+    if (meetingState !== "live") return;
+
+    let attempts = 0;
+    const tryPipSelf = () => {
+      const container = document.getElementById("meetingSDKElement");
+      if (!container) return;
+      attempts++;
+
+      // Log all class names so Railway logs reveal Zoom's internal selectors
+      const allClasses = new Set<string>();
+      container.querySelectorAll("*").forEach((el) => {
+        if (el.className && typeof el.className === "string")
+          el.className.split(" ").forEach((c) => c && allClasses.add(c));
+      });
+      console.log("[ZoomLayout] attempt", attempts, "classes:", [...allClasses].join(" | "));
+
+      // Try known self-view selector patterns
+      const selfSelectors = [
+        '[class*="self-video"]', '[class*="selfVideo"]', '[class*="SelfVideo"]',
+        '[class*="self_video"]', '[class*="myVideo"]', '[class*="local-video"]',
+        '[class*="localVideo"]', '[class*="LocalVideo"]',
+      ];
+      let selfEl: HTMLElement | null = null;
+      for (const sel of selfSelectors) {
+        const found = container.querySelector(sel) as HTMLElement | null;
+        if (found) { selfEl = found; console.log("[ZoomLayout] self-view found via:", sel); break; }
+      }
+
+      if (selfEl) {
+        Object.assign(selfEl.style, {
+          position: "fixed", bottom: "80px", right: "16px",
+          width: "180px", height: "120px",
+          zIndex: "100", borderRadius: "8px", overflow: "hidden",
+        });
+      } else if (attempts < 8) {
+        setTimeout(tryPipSelf, 1500);
+      } else {
+        console.log("[ZoomLayout] self-view not found after", attempts, "attempts");
+      }
+    };
+
+    const t = setTimeout(tryPipSelf, 2000);
+    return () => clearTimeout(t);
+  }, [meetingState]);
 
   // -------------------------------------------------------------------------
   // Core: initialize and join Zoom meeting
@@ -226,13 +285,37 @@ export default function KickoffCallPage() {
     setShowExitPopup(false);
   };
 
-  const handleReschedule = async () => {
+  const handleReschedule = () => {
     track("ko_reschedule_clicked");
+    setShowExitPopup(false);
+    setShowRescheduleModal(true);
+    setSlotsLoading(true);
+    fetch("/api/reschedule-slots")
+      .then((r) => r.json())
+      .then((data) => { setRescheduleSlots(data.slots || []); setSlotsLoading(false); })
+      .catch(() => setSlotsLoading(false));
+  };
+
+  const handleRescheduleConfirm = async () => {
+    if (!selectedSlot) return;
+    setRescheduleConfirming(true);
+    await fetch("/api/reschedule", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slotId: selectedSlot, koCallToken: token }),
+    });
+    track("ko_reschedule_completed", { slotId: selectedSlot, token });
+    setRescheduleConfirmed(true);
+    setRescheduleConfirming(false);
     isManualLeave.current = true;
-    if (zoomClientRef.current) {
-      await zoomClientRef.current.leaveMeeting();
-    }
-    navigate(`/reschedule/${token}`);
+    if (zoomClientRef.current) await zoomClientRef.current.leaveMeeting();
+    navigate(`/post-call/${token}`);
+  };
+
+  const handleBackToCall = () => {
+    setShowRescheduleModal(false);
+    setSelectedSlot(null);
+    setRescheduleConfirmed(false);
   };
 
   const handleLeaveAnyway = async () => {
@@ -420,6 +503,41 @@ export default function KickoffCallPage() {
           onReschedule={handleReschedule}
           onLeaveAnyway={handleLeaveAnyway}
         />
+      )}
+
+      {/* ── Reschedule modal (meeting stays live in background) ── */}
+      {showRescheduleModal && (
+        <>
+          <div onClick={handleBackToCall} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 999, backdropFilter: "blur(2px)" }} />
+          <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", background: "#fff", borderRadius: 20, padding: "32px 28px", width: 440, maxWidth: "92vw", zIndex: 1000, boxShadow: "0 24px 80px rgba(0,0,0,0.25)" }}>
+            <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 6 }}>Pick a better time</h2>
+            <p style={{ color: "#6b7280", fontSize: 14, marginBottom: 20, lineHeight: 1.5 }}>Your advisor is still on the call. Choose a new slot and we'll send a confirmation.</p>
+
+            {slotsLoading ? (
+              <div style={{ textAlign: "center", padding: "24px 0", color: "#9ca3af" }}>Loading slots…</div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
+                {rescheduleSlots.map((slot) => (
+                  <button key={slot.id} onClick={() => setSelectedSlot(slot.id)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "13px 16px", border: selectedSlot === slot.id ? "2px solid #111827" : "1px solid #e5e7eb", borderRadius: 12, background: selectedSlot === slot.id ? "#f9fafb" : "#fff", cursor: "pointer", fontSize: 14, fontWeight: selectedSlot === slot.id ? 600 : 400 }}>
+                    <span>{slot.label}</span>
+                    <span style={{ color: "#6b7280" }}>{slot.time}</span>
+                    {selectedSlot === slot.id && <span style={{ color: "#22c55e", marginLeft: 8 }}>✓</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <button onClick={handleRescheduleConfirm} disabled={!selectedSlot || rescheduleConfirming} style={{ width: "100%", padding: "13px 0", background: selectedSlot ? "#111827" : "#e5e7eb", color: selectedSlot ? "#fff" : "#9ca3af", border: "none", borderRadius: 12, fontWeight: 700, fontSize: 15, cursor: selectedSlot ? "pointer" : "not-allowed", marginBottom: 10 }}>
+              {rescheduleConfirming ? "Confirming…" : "Confirm new time"}
+            </button>
+
+            <div style={{ textAlign: "center" }}>
+              <button onClick={handleBackToCall} style={{ background: "none", border: "none", color: "#6b7280", fontSize: 13, cursor: "pointer", textDecoration: "underline" }}>
+                Back to call
+              </button>
+            </div>
+          </div>
+        </>
       )}
 
       <style>{`
