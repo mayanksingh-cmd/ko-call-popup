@@ -1,3 +1,6 @@
+[phases.setup]
+nixPkgs = ["python3", "nodePackages.node-gyp"]
+
 [phases.install]
 cmds = ["npm install"]
 
