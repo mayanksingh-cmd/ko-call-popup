@@ -18,7 +18,7 @@ type KOCallConfig = {
   userName: string;
 };
 
-type MeetingState = "loading" | "joining" | "live" | "error";
+type MeetingState = "loading" | "prejoin" | "joining" | "live" | "error";
 
 // ---------------------------------------------------------------------------
 // Analytics helper — swap with Mixpanel / Segment in production
@@ -47,6 +47,7 @@ export default function KickoffCallPage() {
   const [showExitPopup, setShowExitPopup] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [joinTime, setJoinTime] = useState<number | null>(null);
+  const [userName, setUserName] = useState("");
 
   // -------------------------------------------------------------------------
   // 1. Fetch KO call config from backend
@@ -61,6 +62,8 @@ export default function KickoffCallPage() {
       })
       .then((data: KOCallConfig) => {
         setCallConfig(data);
+        setUserName(data.userName || "");
+        setMeetingState("prejoin");
         track("ko_call_page_loaded", { token });
       })
       .catch((err) => {
@@ -70,13 +73,8 @@ export default function KickoffCallPage() {
   }, [token]);
 
   // -------------------------------------------------------------------------
-  // 2. Initialize Zoom SDK once config is ready
+  // 2. Initialize Zoom SDK only after user clicks Join
   // -------------------------------------------------------------------------
-  useEffect(() => {
-    if (!callConfig || !meetingContainerRef.current) return;
-
-    initMeeting(callConfig);
-  }, [callConfig]); // only re-run when callConfig changes
 
   // -------------------------------------------------------------------------
   // 3. Block accidental browser close / tab refresh while in meeting
@@ -141,7 +139,7 @@ export default function KickoffCallPage() {
         signature,
         meetingNumber: config.meetingNumber,
         password: config.passcode,
-        userName: config.userName,
+        userName: userName || config.userName,
       });
 
       setMeetingState("live");
@@ -197,6 +195,56 @@ export default function KickoffCallPage() {
   // -------------------------------------------------------------------------
   // Render states
   // -------------------------------------------------------------------------
+  if (meetingState === "loading") {
+    return (
+      <div style={styles.centerScreen}>
+        <div style={styles.spinner} />
+      </div>
+    );
+  }
+
+  if (meetingState === "prejoin") {
+    return (
+      <div style={{ ...styles.centerScreen, background: "#111827" }}>
+        <div style={styles.prejoinCard}>
+          {callConfig?.advisorPhoto && (
+            <img src={callConfig.advisorPhoto} alt={callConfig.advisorName}
+              style={{ width: 64, height: 64, borderRadius: "50%", objectFit: "cover", marginBottom: 12 }} />
+          )}
+          <h2 style={{ color: "#fff", fontSize: 20, fontWeight: 700, marginBottom: 4 }}>
+            Kickoff Call{callConfig?.advisorName ? ` with ${callConfig.advisorName}` : ""}
+          </h2>
+          <p style={{ color: "#9ca3af", fontSize: 13, marginBottom: 28 }}>
+            {callConfig?.callDuration ? `~${callConfig.callDuration}` : ""}
+          </p>
+
+          <label style={{ display: "block", textAlign: "left", width: "100%", marginBottom: 6 }}>
+            <span style={{ color: "#d1d5db", fontSize: 13, fontWeight: 500 }}>Your Name</span>
+            <input
+              type="text"
+              value={userName}
+              onChange={(e) => setUserName(e.target.value)}
+              placeholder="Enter your name"
+              style={styles.nameInput}
+              autoFocus
+            />
+          </label>
+
+          <button
+            onClick={() => {
+              if (!callConfig || !userName.trim()) return;
+              initMeeting(callConfig);
+            }}
+            disabled={!userName.trim()}
+            style={{ ...styles.joinButton, opacity: userName.trim() ? 1 : 0.5 }}
+          >
+            Join Kickoff Call
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (meetingState === "error") {
     return (
       <div style={styles.centerScreen}>
@@ -269,7 +317,7 @@ export default function KickoffCallPage() {
       </div>
 
       {/* ── Zoom meeting container ── */}
-      <div style={{ flex: 1, position: "relative" }}>
+      <div style={{ flex: 1, position: "relative", minHeight: 0 }}>
         {meetingState === "joining" && (
           <div style={styles.loadingOverlay}>
             <div style={styles.spinner} />
@@ -281,7 +329,7 @@ export default function KickoffCallPage() {
         <div
           ref={meetingContainerRef}
           id="meetingSDKElement"
-          style={{ width: "100%", height: "100%" }}
+          style={{ width: "100%", height: "100%", minHeight: "calc(100vh - 56px)" }}
         />
       </div>
 
@@ -380,5 +428,39 @@ const styles: Record<string, React.CSSProperties> = {
     borderTop: "3px solid #60a5fa",
     borderRadius: "50%",
     animation: "spin 0.8s linear infinite",
+  },
+  prejoinCard: {
+    background: "#1f2937",
+    borderRadius: 16,
+    padding: "36px 32px",
+    maxWidth: 400,
+    width: "100%",
+    textAlign: "center" as const,
+    boxShadow: "0 4px 32px rgba(0,0,0,0.4)",
+  },
+  nameInput: {
+    display: "block",
+    width: "100%",
+    marginTop: 6,
+    padding: "10px 14px",
+    borderRadius: 8,
+    border: "1px solid #374151",
+    background: "#111827",
+    color: "#fff",
+    fontSize: 15,
+    outline: "none",
+    boxSizing: "border-box" as const,
+  },
+  joinButton: {
+    marginTop: 20,
+    width: "100%",
+    background: "#2563eb",
+    color: "#fff",
+    border: "none",
+    borderRadius: 10,
+    padding: "12px 0",
+    fontWeight: 700,
+    fontSize: 15,
+    cursor: "pointer",
   },
 };
