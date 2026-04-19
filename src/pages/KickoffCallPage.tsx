@@ -104,51 +104,74 @@ export default function KickoffCallPage() {
   const isManualLeave = useRef(false);
 
   // -------------------------------------------------------------------------
-  // After join: log Zoom DOM classes + try to PiP the self-view
+  // After join: inspect Zoom DOM and send to server (visible in Railway logs)
   // -------------------------------------------------------------------------
   useEffect(() => {
     if (meetingState !== "live") return;
 
-    let attempts = 0;
-    const tryPipSelf = () => {
+    const inspectAndPip = () => {
       const container = document.getElementById("meetingSDKElement");
       if (!container) return;
-      attempts++;
 
-      // Log all class names so Railway logs reveal Zoom's internal selectors
+      const allEls = Array.from(container.querySelectorAll("*")) as HTMLElement[];
+
+      // Collect unique class names
       const allClasses = new Set<string>();
-      container.querySelectorAll("*").forEach((el) => {
+      allEls.forEach((el) => {
         if (el.className && typeof el.className === "string")
           el.className.split(" ").forEach((c) => c && allClasses.add(c));
       });
-      console.log("[ZoomLayout] attempt", attempts, "classes:", Array.from(allClasses).join(" | "));
 
-      // Try known self-view selector patterns
+      // Find elements with significant size (the video tiles)
+      const sizedEls = allEls
+        .filter((el) => {
+          const r = el.getBoundingClientRect();
+          return r.width > 100 && r.height > 100;
+        })
+        .slice(0, 20)
+        .map((el) => ({
+          tag: el.tagName,
+          cls: (el.className || "").toString().substring(0, 80),
+          id: el.id || "",
+          w: Math.round(el.getBoundingClientRect().width),
+          h: Math.round(el.getBoundingClientRect().height),
+        }));
+
+      // Send DOM info to server so it appears in Railway logs
+      fetch("/api/analytics", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          event: "zoom_dom_debug",
+          properties: {
+            videos: container.querySelectorAll("video").length,
+            canvases: container.querySelectorAll("canvas").length,
+            classes: Array.from(allClasses).join("|").substring(0, 3000),
+            sizedEls,
+          },
+        }),
+      }).catch(() => {});
+
+      // Try to PiP the self-view using known selector patterns
       const selfSelectors = [
         '[class*="self-video"]', '[class*="selfVideo"]', '[class*="SelfVideo"]',
         '[class*="self_video"]', '[class*="myVideo"]', '[class*="local-video"]',
         '[class*="localVideo"]', '[class*="LocalVideo"]',
       ];
-      let selfEl: HTMLElement | null = null;
       for (const sel of selfSelectors) {
-        const found = container.querySelector(sel) as HTMLElement | null;
-        if (found) { selfEl = found; console.log("[ZoomLayout] self-view found via:", sel); break; }
-      }
-
-      if (selfEl) {
-        Object.assign(selfEl.style, {
-          position: "fixed", bottom: "80px", right: "16px",
-          width: "180px", height: "120px",
-          zIndex: "100", borderRadius: "8px", overflow: "hidden",
-        });
-      } else if (attempts < 8) {
-        setTimeout(tryPipSelf, 1500);
-      } else {
-        console.log("[ZoomLayout] self-view not found after", attempts, "attempts");
+        const el = container.querySelector(sel) as HTMLElement | null;
+        if (el) {
+          Object.assign(el.style, {
+            position: "fixed", bottom: "80px", right: "16px",
+            width: "180px", height: "120px",
+            zIndex: "100", borderRadius: "8px", overflow: "hidden",
+          });
+          break;
+        }
       }
     };
 
-    const t = setTimeout(tryPipSelf, 2000);
+    const t = setTimeout(inspectAndPip, 3000);
     return () => clearTimeout(t);
   }, [meetingState]);
 
