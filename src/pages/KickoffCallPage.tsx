@@ -195,56 +195,6 @@ export default function KickoffCallPage() {
   // -------------------------------------------------------------------------
   // Render states
   // -------------------------------------------------------------------------
-  if (meetingState === "loading") {
-    return (
-      <div style={styles.centerScreen}>
-        <div style={styles.spinner} />
-      </div>
-    );
-  }
-
-  if (meetingState === "prejoin") {
-    return (
-      <div style={{ ...styles.centerScreen, background: "#111827" }}>
-        <div style={styles.prejoinCard}>
-          {callConfig?.advisorPhoto && (
-            <img src={callConfig.advisorPhoto} alt={callConfig.advisorName}
-              style={{ width: 64, height: 64, borderRadius: "50%", objectFit: "cover", marginBottom: 12 }} />
-          )}
-          <h2 style={{ color: "#fff", fontSize: 20, fontWeight: 700, marginBottom: 4 }}>
-            Kickoff Call{callConfig?.advisorName ? ` with ${callConfig.advisorName}` : ""}
-          </h2>
-          <p style={{ color: "#9ca3af", fontSize: 13, marginBottom: 28 }}>
-            {callConfig?.callDuration ? `~${callConfig.callDuration}` : ""}
-          </p>
-
-          <label style={{ display: "block", textAlign: "left", width: "100%", marginBottom: 6 }}>
-            <span style={{ color: "#d1d5db", fontSize: 13, fontWeight: 500 }}>Your Name</span>
-            <input
-              type="text"
-              value={userName}
-              onChange={(e) => setUserName(e.target.value)}
-              placeholder="Enter your name"
-              style={styles.nameInput}
-              autoFocus
-            />
-          </label>
-
-          <button
-            onClick={() => {
-              if (!callConfig || !userName.trim()) return;
-              initMeeting(callConfig);
-            }}
-            disabled={!userName.trim()}
-            style={{ ...styles.joinButton, opacity: userName.trim() ? 1 : 0.5 }}
-          >
-            Join Kickoff Call
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   if (meetingState === "error") {
     return (
       <div style={styles.centerScreen}>
@@ -318,14 +268,54 @@ export default function KickoffCallPage() {
 
       {/* ── Zoom meeting container ── */}
       <div style={{ flex: 1, position: "relative", minHeight: 0 }}>
+
+        {/* Pre-join screen — overlays the (hidden) meeting container */}
+        {(meetingState === "loading" || meetingState === "prejoin") && (
+          <div style={{ ...styles.loadingOverlay, background: "#111827" }}>
+            {meetingState === "loading" ? (
+              <div style={styles.spinner} />
+            ) : (
+              <div style={styles.prejoinCard}>
+                {callConfig?.advisorPhoto && (
+                  <img src={callConfig.advisorPhoto} alt={callConfig.advisorName}
+                    style={{ width: 64, height: 64, borderRadius: "50%", objectFit: "cover", marginBottom: 12 }} />
+                )}
+                <h2 style={{ color: "#fff", fontSize: 20, fontWeight: 700, marginBottom: 4 }}>
+                  Kickoff Call{callConfig?.advisorName ? ` with ${callConfig.advisorName}` : ""}
+                </h2>
+                <p style={{ color: "#9ca3af", fontSize: 13, marginBottom: 28 }}>
+                  {callConfig?.callDuration ? `~${callConfig.callDuration}` : ""}
+                </p>
+                <label style={{ display: "block", textAlign: "left", width: "100%", marginBottom: 6 }}>
+                  <span style={{ color: "#d1d5db", fontSize: 13, fontWeight: 500 }}>Your Name</span>
+                  <input
+                    type="text"
+                    value={userName}
+                    onChange={(e) => setUserName(e.target.value)}
+                    placeholder="Enter your name"
+                    style={styles.nameInput}
+                    autoFocus
+                  />
+                </label>
+                <button
+                  onClick={() => { if (callConfig && userName.trim()) initMeeting(callConfig); }}
+                  disabled={!userName.trim()}
+                  style={{ ...styles.joinButton, opacity: userName.trim() ? 1 : 0.5 }}
+                >
+                  Join Kickoff Call
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
         {meetingState === "joining" && (
           <div style={styles.loadingOverlay}>
             <div style={styles.spinner} />
-            <p style={{ color: "#d1d5db", marginTop: 16, fontSize: 14 }}>
-              Joining your kickoff call…
-            </p>
+            <p style={{ color: "#d1d5db", marginTop: 16, fontSize: 14 }}>Joining your kickoff call…</p>
           </div>
         )}
+
         <div
           ref={meetingContainerRef}
           id="meetingSDKElement"
