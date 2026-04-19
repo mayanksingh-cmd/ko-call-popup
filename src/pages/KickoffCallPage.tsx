@@ -104,16 +104,21 @@ export default function KickoffCallPage() {
       const client = ZoomMtgEmbedded.createClient();
       zoomClientRef.current = client;
 
-      // Init against your container div
+      // Init against your container div.
+      // Use full viewport dimensions so Zoom renders active speaker large
+      // and self-view as a small PiP — matching native Zoom layout.
+      const w = meetingContainerRef.current!.clientWidth || window.innerWidth;
+      const h = meetingContainerRef.current!.clientHeight || window.innerHeight;
+
       await client.init({
         zoomAppRoot: meetingContainerRef.current!,
         language: "en-US",
         patchJsMedia: true,
         customize: {
           video: {
-            isResizable: true,
+            isResizable: false,
             viewSizes: {
-              default: { width: 1200, height: 600 },
+              default: { width: w, height: h },
             },
           },
         },
