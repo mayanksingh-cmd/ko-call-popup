@@ -271,39 +271,75 @@ export default function KickoffCallPage() {
 
         {/* Pre-join screen — overlays the (hidden) meeting container */}
         {(meetingState === "loading" || meetingState === "prejoin") && (
-          <div style={{ ...styles.loadingOverlay, background: "#111827" }}>
+          <div style={{ position: "absolute", inset: 0, background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10 }}>
             {meetingState === "loading" ? (
               <div style={styles.spinner} />
             ) : (
-              <div style={styles.prejoinCard}>
-                {callConfig?.advisorPhoto && (
-                  <img src={callConfig.advisorPhoto} alt={callConfig.advisorName}
-                    style={{ width: 64, height: 64, borderRadius: "50%", objectFit: "cover", marginBottom: 12 }} />
-                )}
-                <h2 style={{ color: "#fff", fontSize: 20, fontWeight: 700, marginBottom: 4 }}>
-                  Kickoff Call{callConfig?.advisorName ? ` with ${callConfig.advisorName}` : ""}
-                </h2>
-                <p style={{ color: "#9ca3af", fontSize: 13, marginBottom: 28 }}>
-                  {callConfig?.callDuration ? `~${callConfig.callDuration}` : ""}
-                </p>
-                <label style={{ display: "block", textAlign: "left", width: "100%", marginBottom: 6 }}>
-                  <span style={{ color: "#d1d5db", fontSize: 13, fontWeight: 500 }}>Your Name</span>
+              <div style={{ display: "flex", gap: 48, alignItems: "center", padding: "0 40px", maxWidth: 900, width: "100%" }}>
+
+                {/* Left: video preview */}
+                <div style={{ flex: "0 0 480px", borderRadius: 12, overflow: "hidden", background: "#1a1a1a", aspectRatio: "4/3", display: "flex", flexDirection: "column" }}>
+                  {/* Camera area */}
+                  <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <svg width="96" height="96" viewBox="0 0 96 96" fill="none">
+                      <rect x="24" y="20" width="48" height="44" rx="22" fill="#4a4a4a"/>
+                      <ellipse cx="48" cy="76" rx="36" ry="18" fill="#4a4a4a"/>
+                    </svg>
+                  </div>
+                  {/* Controls bar */}
+                  <div style={{ background: "#222", padding: "10px 16px", display: "flex", alignItems: "center", gap: 8 }}>
+                    <button style={styles.zoomCtrlBtn}>
+                      <span style={{ fontSize: 16 }}>🎤</span>
+                      <span style={{ fontSize: 11 }}>Mute</span>
+                      <span style={{ fontSize: 10, color: "#aaa" }}>∧</span>
+                    </button>
+                    <button style={styles.zoomCtrlBtn}>
+                      <span style={{ fontSize: 16 }}>📷</span>
+                      <span style={{ fontSize: 11 }}>Start Video</span>
+                      <span style={{ fontSize: 10, color: "#aaa" }}>∧</span>
+                    </button>
+                    <button style={{ ...styles.zoomCtrlBtn, marginLeft: "auto" }}>
+                      <span style={{ fontSize: 11 }}>🖼 Backgrounds</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Right: form */}
+                <div style={{ flex: 1 }}>
+                  <h2 style={{ fontSize: 22, fontWeight: 700, color: "#111", marginBottom: 20 }}>Enter Meeting Info</h2>
+
+                  <label style={{ display: "block", marginBottom: 4, fontSize: 14, color: "#111", fontWeight: 500 }}>
+                    Your Name
+                  </label>
                   <input
                     type="text"
                     value={userName}
                     onChange={(e) => setUserName(e.target.value)}
-                    placeholder="Enter your name"
-                    style={styles.nameInput}
+                    onKeyDown={(e) => { if (e.key === "Enter" && callConfig && userName.trim()) initMeeting(callConfig); }}
+                    placeholder=""
+                    style={styles.zoomNameInput}
                     autoFocus
                   />
-                </label>
-                <button
-                  onClick={() => { if (callConfig && userName.trim()) initMeeting(callConfig); }}
-                  disabled={!userName.trim()}
-                  style={{ ...styles.joinButton, opacity: userName.trim() ? 1 : 0.5 }}
-                >
-                  Join Kickoff Call
-                </button>
+
+                  <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#333", marginBottom: 20, cursor: "pointer" }}>
+                    <input type="checkbox" style={{ width: 14, height: 14 }} />
+                    Remember my name for future meetings
+                  </label>
+
+                  <button
+                    onClick={() => { if (callConfig && userName.trim()) initMeeting(callConfig); }}
+                    disabled={!userName.trim()}
+                    style={{ ...styles.zoomJoinBtn, opacity: userName.trim() ? 1 : 0.6 }}
+                  >
+                    Join
+                  </button>
+
+                  <p style={{ marginTop: 14, fontSize: 12, color: "#666", lineHeight: 1.5 }}>
+                    By clicking "Join", you agree to our{" "}
+                    <span style={{ color: "#0070c9", cursor: "pointer" }}>Terms of Service</span> and{" "}
+                    <span style={{ color: "#0070c9", cursor: "pointer" }}>Privacy Statement</span>.
+                  </p>
+                </div>
               </div>
             )}
           </div>
@@ -418,6 +454,42 @@ const styles: Record<string, React.CSSProperties> = {
     borderTop: "3px solid #60a5fa",
     borderRadius: "50%",
     animation: "spin 0.8s linear infinite",
+  },
+  zoomCtrlBtn: {
+    background: "rgba(255,255,255,0.15)",
+    border: "none",
+    borderRadius: 6,
+    color: "#fff",
+    padding: "5px 10px",
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    gap: 4,
+    fontSize: 12,
+  },
+  zoomNameInput: {
+    display: "block",
+    width: "100%",
+    marginBottom: 12,
+    padding: "9px 12px",
+    border: "1px solid #ccc",
+    borderRadius: 4,
+    fontSize: 15,
+    outline: "none",
+    boxSizing: "border-box" as const,
+    background: "#fff",
+    color: "#111",
+  },
+  zoomJoinBtn: {
+    width: "100%",
+    background: "#e8e8e8",
+    color: "#333",
+    border: "none",
+    borderRadius: 6,
+    padding: "11px 0",
+    fontWeight: 500,
+    fontSize: 15,
+    cursor: "pointer",
   },
   prejoinCard: {
     background: "#1f2937",
