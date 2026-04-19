@@ -90,6 +90,9 @@ export default function KickoffCallPage() {
     return () => window.removeEventListener("beforeunload", handler);
   }, [meetingState]);
 
+  // Prevents double-navigation when we call leaveMeeting() ourselves
+  const isManualLeave = useRef(false);
+
   // -------------------------------------------------------------------------
   // Core: initialize and join Zoom meeting
   // -------------------------------------------------------------------------
@@ -115,6 +118,23 @@ export default function KickoffCallPage() {
           },
         },
       });
+
+      // Hide Zoom's internal leave/end button so only our custom button triggers the popup.
+      // Use a MutationObserver because Zoom renders the toolbar asynchronously.
+      if (!document.getElementById("zoom-hide-leave")) {
+        const style = document.createElement("style");
+        style.id = "zoom-hide-leave";
+        style.textContent = `
+          button[class*="leave" i], button[class*="Leave"],
+          button[class*="leaveBtn"], button[class*="leave-btn"],
+          button[aria-label*="Leave" i], button[title*="Leave" i],
+          [class*="LeaveBtn"], [class*="leave-meeting"],
+          [class*="end-meeting"], [class*="endBtn"] {
+            display: none !important;
+          }
+        `;
+        document.head.appendChild(style);
+      }
 
       // Get server-signed JWT — never generate this in the browser
       const sigRes = await fetch("/api/zoom-signature", {
@@ -146,9 +166,10 @@ export default function KickoffCallPage() {
       setJoinTime(Date.now());
       track("ko_meeting_join_success", { token, meetingNumber: config.meetingNumber });
 
-      // Detect meeting close / disconnect
+      // Detect meeting close / disconnect.
+      // Skip navigation if we're already handling it (manual leave/reschedule).
       client.on("connection-change", (payload: any) => {
-        if (payload?.state === "Closed") {
+        if (payload?.state === "Closed" && !isManualLeave.current) {
           const secondsInCall = joinTime ? Math.floor((Date.now() - joinTime) / 1000) : 0;
           track("ko_meeting_closed", { secondsInCall });
           navigate(`/post-call/${token}`);
@@ -178,6 +199,7 @@ export default function KickoffCallPage() {
 
   const handleReschedule = async () => {
     track("ko_reschedule_clicked");
+    isManualLeave.current = true;
     if (zoomClientRef.current) {
       await zoomClientRef.current.leaveMeeting();
     }
@@ -186,6 +208,7 @@ export default function KickoffCallPage() {
 
   const handleLeaveAnyway = async () => {
     track("ko_leave_anyway_clicked");
+    isManualLeave.current = true;
     if (zoomClientRef.current) {
       await zoomClientRef.current.leaveMeeting();
     }
@@ -219,9 +242,9 @@ export default function KickoffCallPage() {
   }
 
   return (
-    <div style={{ height: "100vh", display: "flex", flexDirection: "column", background: "#111827" }}>
+    <div style={{ height: "100vh", position: "relative", background: "#000", overflow: "hidden" }}>
 
-      {/* ── Header bar — hidden during pre-join ── */}
+      {/* ── Header bar — floating overlay, hidden during pre-join ── */}
       <div style={{ ...styles.header, display: (meetingState === "loading" || meetingState === "prejoin") ? "none" : "flex" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           {callConfig?.advisorPhoto && (
@@ -266,8 +289,8 @@ export default function KickoffCallPage() {
         </div>
       </div>
 
-      {/* ── Zoom meeting container ── */}
-      <div style={{ flex: 1, position: "relative", minHeight: 0 }}>
+      {/* ── Zoom meeting container — full viewport height ── */}
+      <div style={{ position: "absolute", inset: 0 }}>
 
         {/* Pre-join screen — overlays the (hidden) meeting container */}
         {(meetingState === "loading" || meetingState === "prejoin") && (
@@ -356,7 +379,7 @@ export default function KickoffCallPage() {
         <div
           ref={meetingContainerRef}
           id="meetingSDKElement"
-          style={{ width: "100%", height: "100%", minHeight: "calc(100vh - 56px)" }}
+          style={{ width: "100%", height: "100%" }}
         />
       </div>
 
@@ -383,13 +406,16 @@ export default function KickoffCallPage() {
 // ---------------------------------------------------------------------------
 const styles: Record<string, React.CSSProperties> = {
   header: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 20,
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
     padding: "10px 20px",
-    background: "#1f2937",
-    borderBottom: "1px solid #374151",
-    flexShrink: 0,
+    background: "linear-gradient(to bottom, rgba(0,0,0,0.75) 0%, transparent 100%)",
     height: 56,
   },
   leaveButton: {
