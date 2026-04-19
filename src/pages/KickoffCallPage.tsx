@@ -121,7 +121,7 @@ export default function KickoffCallPage() {
         if (el.className && typeof el.className === "string")
           el.className.split(" ").forEach((c) => c && allClasses.add(c));
       });
-      console.log("[ZoomLayout] attempt", attempts, "classes:", [...allClasses].join(" | "));
+      console.log("[ZoomLayout] attempt", attempts, "classes:", Array.from(allClasses).join(" | "));
 
       // Try known self-view selector patterns
       const selfSelectors = [
