@@ -105,11 +105,6 @@ export default function KickoffCallPage() {
       zoomClientRef.current = client;
 
       // Init against your container div.
-      // Use full viewport dimensions so Zoom renders active speaker large
-      // and self-view as a small PiP — matching native Zoom layout.
-      const w = meetingContainerRef.current!.clientWidth || window.innerWidth;
-      const h = meetingContainerRef.current!.clientHeight || window.innerHeight;
-
       await client.init({
         zoomAppRoot: meetingContainerRef.current!,
         language: "en-US",
@@ -118,11 +113,40 @@ export default function KickoffCallPage() {
           video: {
             isResizable: false,
             viewSizes: {
-              default: { width: w, height: h },
+              default: { width: window.screen.width, height: window.screen.height },
             },
           },
         },
       });
+
+      // After Zoom renders, inject CSS to:
+      // 1. Force the Zoom container to fill the viewport via transform scale
+      // 2. Make self-view (local participant) small like native Zoom PiP
+      if (!document.getElementById("zoom-layout-fix")) {
+        const style = document.createElement("style");
+        style.id = "zoom-layout-fix";
+        style.textContent = `
+          /* Force Zoom container to fill viewport */
+          #meetingSDKElement { width: 100% !important; height: 100% !important; }
+          #meetingSDKElement > div { width: 100% !important; height: 100% !important; }
+
+          /* Self-view: shrink and pin to bottom-right like native Zoom PiP */
+          [class*="self-video"], [class*="selfVideo"],
+          [class*="SelfVideo"], [class*="self_video"],
+          video-player-container[class*="self"],
+          [class*="my-video"], [class*="myVideo"] {
+            width: 160px !important;
+            height: 90px !important;
+            position: fixed !important;
+            bottom: 80px !important;
+            right: 16px !important;
+            border-radius: 8px !important;
+            z-index: 50 !important;
+            overflow: hidden !important;
+          }
+        `;
+        document.head.appendChild(style);
+      }
 
       // Hide Zoom's internal leave/end button so only our custom button triggers the popup.
       // Use a MutationObserver because Zoom renders the toolbar asynchronously.
